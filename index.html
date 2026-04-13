@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Azerbaijan eTender Search</title>
+<style>
+  :root {
+    --bg: #f7f6f2;
+    --surface: #ffffff;
+    --border: #e2dfd6;
+    --border-strong: #c5c1b8;
+    --text: #1a1917;
+    --text-muted: #6b6860;
+    --accent: #1b5e3b;
+    --accent-light: #e8f4ee;
+    --accent-hover: #154d30;
+    --warn-bg: #fdf5e6;
+    --warn-border: #e8c97d;
+    --warn-text: #7a5c10;
+    --font: Georgia, serif;
+    --mono: 'Courier New', monospace;
+    --radius: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+  /* Header */
+  .site-header {
+    background: var(--accent);
+    color: #fff;
+    padding: 18px 36px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .flag { width: 34px; height: 22px; display: flex; flex-direction: column; border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+  .flag div:nth-child(1) { flex:1; background:#0092BC; }
+  .flag div:nth-child(2) { flex:1; background:#E8112D; }
+  .flag div:nth-child(3) { flex:1; background:#509E2F; }
+  .site-header h1 { font-size: 19px; font-weight: normal; }
+  .header-meta { margin-left: auto; font-family: var(--mono); font-size: 11px; opacity: 0.7; text-align: right; line-height: 1.5; }
+
+  /* Main */
+  .main { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+
+  /* Info banner */
+  .info-banner {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: var(--warn-text);
+    line-height: 1.6;
+    display: none;
+  }
+  .info-banner.show { display: block; }
+  .info-banner a { color: var(--accent); }
+  .info-banner strong { font-weight: 600; }
+
+  /* Filters */
+  .filter-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+  .filter-panel h2 {
+    font-size: 11px; font-weight: normal; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted); font-family: var(--mono);
+    margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .filter-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 140px; }
+  .field.grow { flex: 1; }
+  .field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-family: var(--mono); }
+  .field input, .field select {
+    border: 1px solid var(--border-strong); border-radius: var(--radius);
+    padding: 8px 10px; font-size: 13px; font-family: var(--font);
+    background: var(--bg); color: var(--text); outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(27,94,59,0.1); }
+  .btn {
+    padding: 8px 18px; background: var(--accent); color: #fff;
+    border: none; border-radius: var(--radius); font-size: 13px;
+    font-family: var(--font); cursor: pointer; white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn.ghost {
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .btn.ghost:hover { background: var(--accent-light); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* Meta strip */
+  .meta-strip {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; min-height: 32px;
+  }
+  .meta-left { font-size: 12px; color: var(--text-muted); font-family: var(--mono); display: flex; align-items: center; gap: 8px; }
+  .spinner { width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+  .spinner.on { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .meta-right { display: flex; gap: 8px; }
+
+  /* Table */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-wrap.empty { display: flex; align-items: center; justify-content: center; min-height: 180px; border-style: dashed; }
+  .empty-state { text-align: center; color: var(--text-muted); font-size: 13px; line-height: 2; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: #f3f1ea; border-bottom: 2px solid var(--border); }
+  thead th {
+    padding: 10px 12px; text-align: left;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); font-family: var(--mono); font-weight: normal;
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  thead th:hover { color: var(--text); }
+  thead th.sorted { color: var(--accent); }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #faf9f7; }
+  tbody td { padding: 9px 12px; vertical-align: top; line-height: 1.5; }
+  tbody td.mono { font-family: var(--mono); font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+  a.detail-link { color: var(--accent); text-decoration: none; font-family: var(--mono); font-size: 11px; }
+  a.detail-link:hover { text-decoration: underline; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 10px; font-family: var(--mono); }
+  .badge.open    { background: #e8f4ee; color: #154d30; border: 1px solid #a3d4b5; }
+  .badge.closed  { background: #fdeaea; color: #7a2020; border: 1px solid #e8aaaa; }
+  .badge.pending { background: #fdf5e6; color: #7a5c10; border: 1px solid #e8c97d; }
+
+  /* Pagination */
+  .pager { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 14px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 12px; flex-wrap: wrap; }
+  .pg { padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: transparent; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .pg:hover { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+  .pg.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pg:disabled { opacity: 0.35; cursor: default; }
+  .pager-info { color: var(--text-muted); margin-left: 8px; }
+
+  /* Footer */
+  footer { text-align: center; font-size: 11px; color: var(--text-muted); font-family: var(--mono); padding: 20px; margin-top: 32px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="flag"><div></div><div></div><div></div></div>
+  <h1>Azerbaijan eTender Search</h1>
+  <div class="header-meta">
+    <div id="hLastUpdated">Loading data…</div>
+    <div id="hDataCount"></div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Warning if no data yet -->
+  <div class="info-banner" id="noBanner">
+    <strong>No data loaded yet.</strong> The scraper hasn't run yet or returned 0 results.<br>
+    Go to your GitHub repo → <strong>Actions</strong> → <em>Scrape eTender</em> → <strong>Run workflow</strong> to fetch data now.
+    Make sure <code>config.json</code> has the correct <code>search_url</code> first —
+    see the <a href="https://github.com" target="_blank">README</a> for instructions.
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-panel">
+    <h2>Filter &amp; Search</h2>
+    <div class="filter-row">
+      <div class="field grow">
+        <label>Keyword</label>
+        <input type="text" id="fKeyword" placeholder="Search in title or organization…" oninput="applyFilters()" />
+      </div>
+      <div class="field">
+        <label>Date From</label>
+        <input type="date" id="fDateFrom" onchange="applyFilters()" />
+      </div>
+      <div class="field">
+        <label>Date To</label>
+        <input type="date" id="fDateTo" onchange="applyFilters()" />
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select id="fStatus" onchange="applyFilters()">
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="pending">Pending</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn ghost" onclick="clearFilters()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meta strip -->
+  <div class="meta-strip">
+    <div class="meta-left">
+      <div class="spinner" id="spinner"></div>
+      <span id="statusText">Loading…</span>
+    </div>
+    <div class="meta-right">
+      <button class="btn ghost" id="btnCSV"  onclick="exportCSV()"  disabled>Export CSV</button>
+      <button class="btn ghost" id="btnJSON" onclick="exportJSON()" disabled>Export JSON</button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap empty" id="tableWrap">
+    <div class="empty-state">Loading data…</div>
+  </div>
+
+</main>
+
+<footer>
+  Data from etender.gov.az · Scraped via GitHub Actions · <span id="footerTs"></span>
+</footer>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let allData   = [];   // full dataset from JSON
+let filtered  = [];   // after client-side filters
+let page      = 1;
+const PER     = 25;
+let sortKey   = 'date_published';
+let sortAsc   = false;
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+async function boot() {
+  spin(true);
+  try {
+    const res = await fetch('data/tenders.json?_=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+
+    allData = json.results || [];
+
+    // Header meta
+    const ts = json.scraped_at ? new Date(json.scraped_at).toLocaleString() : '—';
+    document.getElementById('hLastUpdated').textContent = 'Updated: ' + ts;
+    document.getElementById('hDataCount').textContent   = json.count + ' records';
+    document.getElementById('footerTs').textContent     = 'Last scraped: ' + ts;
+
+    if (allData.length === 0) {
+      document.getElementById('noBanner').classList.add('show');
+      setStatus('0 records in data file');
+    } else {
+      applyFilters();
+    }
+    document.getElementById('btnCSV').disabled  = allData.length === 0;
+    document.getElementById('btnJSON').disabled = allData.length === 0;
+
+  } catch (e) {
+    document.getElementById('noBanner').classList.add('show');
+    setStatus('Could not load data/tenders.json — run the scraper first');
+    document.getElementById('tableWrap').innerHTML =
+      '<div class="empty-state">No data file found.<br>Run the GitHub Actions workflow to generate it.</div>';
+  }
+  spin(false);
+}
+
+// ─── Filter ───────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const kw       = v('fKeyword').toLowerCase();
+  const dateFrom = v('fDateFrom');
+  const dateTo   = v('fDateTo');
+  const status   = v('fStatus');
+
+  filtered = allData.filter(r => {
+    if (kw && !((r.title||'') + ' ' + (r.organization||'')).toLowerCase().includes(kw)) return false;
+    if (status && r.status !== status) return false;
+    if (dateFrom && r.date_published && r.date_published < dateFrom) return false;
+    if (dateTo   && r.date_published && r.date_published > dateTo)   return false;
+    return true;
+  });
+
+  page = 1;
+  renderTable();
+  setStatus(filtered.length + ' of ' + allData.length + ' records');
+}
+
+function clearFilters() {
+  ['fKeyword','fDateFrom','fDateTo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fStatus').value = '';
+  applyFilters();
+}
+
+// ─── Sort ─────────────────────────────────────────────────────────────────────
+function sortBy(key) {
+  if (sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = true; }
+  renderTable();
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+const COLS = [
+  { key: 'id',             label: '#',           cls: 'mono' },
+  { key: 'title',          label: 'Title / Subject' },
+  { key: 'organization',   label: 'Organization' },
+  { key: 'date_published', label: 'Published',   cls: 'mono' },
+  { key: 'deadline',       label: 'Deadline',    cls: 'mono' },
+  { key: 'status',         label: 'Status' },
+  { key: '_link',          label: 'Link',        cls: 'mono' },
+];
+
+function renderTable() {
+  const wrap = document.getElementById('tableWrap');
+  if (!filtered.length) {
+    wrap.classList.add('empty');
+    wrap.innerHTML = '<div class="empty-state">No results match your filters.</div>';
+    return;
+  }
+  wrap.classList.remove('empty');
+
+  const sorted = [...filtered].sort((a, b) => {
+    const va = String(a[sortKey] || '');
+    const vb = String(b[sortKey] || '');
+    return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  const start = (page - 1) * PER;
+  const slice = sorted.slice(start, start + PER);
+  const totalPages = Math.ceil(sorted.length / PER);
+
+  const thead = COLS.map(c => {
+    const s = sortKey === c.key;
+    const arrow = s ? (sortAsc ? ' ↑' : ' ↓') : '';
+    return `<th class="${s?'sorted':''}" onclick="sortBy('${c.key}')">${c.label}${arrow}</th>`;
+  }).join('');
+
+  const tbody = slice.map(r => {
+    const statusBadge = `<span class="badge ${r.status||'pending'}">${r.status||'—'}</span>`;
+    const linkCell = r.url ? `<a class="detail-link" href="${esc(r.url)}" target="_blank" rel="noopener">View →</a>` : '—';
+    return `<tr>
+      <td class="mono">${esc(r.id||'')}</td>
+      <td>${esc(r.title||'')}</td>
+      <td>${esc(r.organization||'')}</td>
+      <td class="mono">${esc(r.date_published||'')}</td>
+      <td class="mono">${esc(r.deadline||'')}</td>
+      <td>${statusBadge}</td>
+      <td>${linkCell}</td>
+    </tr>`;
+  }).join('');
+
+  let pager = '';
+  if (totalPages > 1) {
+    const maxBtns = 10;
+    const pages = Array.from({length: Math.min(totalPages, maxBtns)}, (_,i) => i+1);
+    pager = `<div class="pager">
+      <button class="pg" onclick="goPage(${page-1})" ${page<=1?'disabled':''}>‹</button>
+      ${pages.map(p => `<button class="pg ${p===page?'active':''}" onclick="goPage(${p})">${p}</button>`).join('')}
+      <button class="pg" onclick="goPage(${page+1})" ${page>=totalPages?'disabled':''}>›</button>
+      <span class="pager-info">${start+1}–${Math.min(start+PER,sorted.length)} / ${sorted.length}</span>
+    </div>`;
+  }
+
+  wrap.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>${pager}`;
+}
+
+function goPage(p) {
+  const max = Math.ceil(filtered.length / PER);
+  if (p < 1 || p > max) return;
+  page = p;
+  renderTable();
+  document.getElementById('tableWrap').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const headers = ['id','title','organization','date_published','deadline','status','url'];
+  const rows = filtered.map(r => headers.map(k => `"${String(r[k]||'').replace(/"/g,'""')}"`).join(','));
+  download([headers.join(','), ...rows].join('\n'), 'tenders.csv', 'text/csv');
+}
+
+function exportJSON() {
+  download(JSON.stringify(filtered, null, 2), 'tenders.json', 'application/json');
+}
+
+function download(content, name, mime) {
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([content], {type: mime})),
+    download: name
+  });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function v(id)       { return document.getElementById(id).value.trim(); }
+function esc(s)      { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function setStatus(t){ document.getElementById('statusText').textContent = t; }
+function spin(on)    { document.getElementById('spinner').classList.toggle('on', on); }
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+{
+  "_comment": "Edit this file to match etender.gov.az's actual search URL and HTML structure.",
+
+  "base_url": "https://etender.gov.az",
+
+  "search_url": "https://etender.gov.az/tender/search?keyword={KEYWORD}&startDate={DATE_FROM}&endDate={DATE_TO}&page={PAGE}",
+
+  "_search_url_note": [
+    "HOW TO FIND THE REAL URL:",
+    "1. Open https://etender.gov.az in Chrome",
+    "2. Press F12 → Network tab → filter by XHR/Fetch",
+    "3. Do a search on the site",
+    "4. Click the request that loads tender results",
+    "5. Copy the Request URL",
+    "6. Replace the actual keyword with {KEYWORD}, dates with {DATE_FROM}/{DATE_TO}, page number with {PAGE}"
+  ],
+
+  "row_selectors": [
+    ".tender-item",
+    ".procurement-item",
+    ".result-item",
+    "table.tenders-table tbody tr",
+    "table.results tbody tr",
+    ".tender-list li",
+    ".card.tender"
+  ],
+
+  "_row_selectors_note": "CSS selectors tried in order to find each tender row. Add the real selector once you inspect the page HTML.",
+
+  "field_map": {
+    "_note": "For each field: use a CSS selector string (e.g. '.tender-title') OR a column index integer (0=first cell). Empty string = skip.",
+    "id":             0,
+    "title":          1,
+    "organization":   2,
+    "date_published": 3,
+    "deadline":       4,
+    "type":           "",
+    "status":         ""
+  },
+
+  "default_keyword":   "",
+  "default_date_from": "",
+  "default_date_to":   "",
+  "max_pages": 10
+}
