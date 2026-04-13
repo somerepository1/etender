@@ -119,6 +119,7 @@ td{padding:8px 11px;vertical-align:top;line-height:1.5}
 .badge.closed{background:var(--rl);color:#6b1a1a;border:1px solid var(--rb)}
 .badge.pending,.badge.other{background:var(--al);color:var(--amber);border:1px solid var(--ab)}
 a.vl{color:var(--green);text-decoration:none;font-family:var(--mono);font-size:11px}
+.price{color:var(--amber);font-weight:500}
 a.vl:hover{text-decoration:underline}
 
 .pager{display:flex;align-items:center;justify-content:center;gap:5px;padding:13px;border-top:1px solid var(--border);font-family:var(--mono);font-size:12px;flex-wrap:wrap}
@@ -450,10 +451,15 @@ function ingest(data){
 
 // ── Table ─────────────────────────────────────────────────────────────────────
 const COLS=[
-  {k:"id",lb:"#"},{k:"title",lb:"Title"},{k:"organization",lb:"Organization"},
-  {k:"matched_keyword",lb:"Keyword"},{k:"type",lb:"Type"},
-  {k:"date_published",lb:"Published"},{k:"deadline",lb:"Deadline"},
-  {k:"status",lb:"Status"},{k:"_link",lb:"Link"}
+  {k:"organization",  lb:"Satınalan təşkilat", w:"180px"},
+  {k:"title",         lb:"Müsabiqənin adı",    w:"260px"},
+  {k:"estimated_price",lb:"Ehtimal qiymət",   w:"110px"},
+  {k:"date_published",lb:"Dərc tarixi",        w:"130px"},
+  {k:"deadline",      lb:"Son təqdim tarixi",  w:"130px"},
+  {k:"opening_date",  lb:"Açılış tarixi",      w:"130px"},
+  {k:"matched_keyword",lb:"Açar söz",          w:"100px"},
+  {k:"status",        lb:"Status",             w:"70px"},
+  {k:"_link",         lb:"Link",               w:"55px"},
 ];
 
 function sortBy(k){ sKey===k?(sAsc=!sAsc):(sKey=k,sAsc=true); render(); }
@@ -470,15 +476,15 @@ function render(){
     sAsc?String(a[sKey]||"").localeCompare(String(b[sKey]||"")):
          String(b[sKey]||"").localeCompare(String(a[sKey]||"")));
   const start=(pg-1)*PER, slice=sorted.slice(start,start+PER), tp=Math.ceil(sorted.length/PER);
-  const th=COLS.map(c=>`<th class="${sKey===c.k?"s":""}" onclick="sortBy('${c.k}')">${c.lb}${sKey===c.k?(sAsc?" ↑":" ↓"):""}</th>`).join("");
+  const th=COLS.map(c=>`<th class="${sKey===c.k?"s":""}" style="min-width:${c.w||'auto'}" onclick="sortBy('${c.k}')">${c.lb}${sKey===c.k?(sAsc?" ↑":" ↓"):""}</th>`).join("");
   const tb=slice.map(r=>`<tr>
-    <td class="mc">${x(r.id)}</td>
-    <td style="max-width:260px">${x(r.title)}</td>
     <td style="max-width:180px">${x(r.organization)}</td>
+    <td style="max-width:260px">${x(r.title)}</td>
+    <td class="mc price">${x(r.estimated_price)||"—"}</td>
+    <td class="mc">${fmtDate(r.date_published)}</td>
+    <td class="mc">${fmtDate(r.deadline)}</td>
+    <td class="mc">${fmtDate(r.opening_date)||"—"}</td>
     <td><span class="kwtag">${x(r.matched_keyword)}</span></td>
-    <td class="mc">${x(r.type)}</td>
-    <td class="mc">${x(r.date_published)}</td>
-    <td class="mc">${x(r.deadline)}</td>
     <td><span class="badge ${r.status||"other"}">${r.status||"—"}</span></td>
     <td>${r.url?`<a class="vl" href="${x(r.url)}" target="_blank" rel="noopener">View →</a>`:"—"}</td>
   </tr>`).join("");
@@ -502,13 +508,20 @@ function goPage(p){
 
 // ── Export ────────────────────────────────────────────────────────────────────
 function expCSV(){
-  const h=["id","title","organization","matched_keyword","type","date_published","deadline","status","url"];
+  const h=["organization","title","estimated_price","date_published","deadline","opening_date","matched_keyword","status","url"];
   dl([h.join(","),...filtered.map(r=>h.map(k=>`"${String(r[k]||"").replace(/"/g,'""')}"`).join(","))].join("\n"),"tenders.csv","text/csv");
 }
 function expJSON(){ dl(JSON.stringify(filtered,null,2),"tenders.json","application/json"); }
 function dl(c,n,m){const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(new Blob([c],{type:m})),download:n});document.body.appendChild(a);a.click();document.body.removeChild(a);}
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
+function fmtDate(s){
+  if(!s||s==="—") return "—";
+  // Try to format ISO dates nicely: 2026-04-09T10:00:00 → 09.04.2026 10:00
+  const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}:\d{2}))?/);
+  if(m) return m[3]?`${m[3]}.${m[2]}.${m[1]} ${m[4]}`:`${m[3]}.${m[2]}.${m[1]}`;
+  return s;
+}
 function x(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function slug(s){return s.replace(/[^a-z0-9]/gi,"-");}
 function setHeader(txt){document.getElementById("hdrMeta").textContent=txt+" · "+detectRepo().owner+"/"+detectRepo().repo;}
