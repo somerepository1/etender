@@ -1,0 +1,58 @@
+name: Scrape eTender
+
+on:
+  # Every Monday at 08:00 Baku time (UTC+4 = 04:00 UTC) — gets the full previous week
+  schedule:
+    - cron: '0 4 * * 1'
+
+  # Manual trigger — override keywords or dates if needed
+  workflow_dispatch:
+    inputs:
+      keywords:
+        description: 'Comma-separated keywords (leave blank to use defaults from config.json)'
+        required: false
+        default: ''
+      date_from:
+        description: 'Date from YYYY-MM-DD (leave blank = last 7 days)'
+        required: false
+        default: ''
+      date_to:
+        description: 'Date to YYYY-MM-DD (leave blank = today)'
+        required: false
+        default: ''
+      max_pages:
+        description: 'Max pages per keyword'
+        required: false
+        default: '20'
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run scraper
+        env:
+          KEYWORDS:  ${{ github.event.inputs.keywords  || '' }}
+          DATE_FROM: ${{ github.event.inputs.date_from || '' }}
+          DATE_TO:   ${{ github.event.inputs.date_to   || '' }}
+          MAX_PAGES: ${{ github.event.inputs.max_pages || '20' }}
+        run: python scraper.py
+
+      - name: Commit results
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/tenders.json
+          git diff --cached --quiet || git commit -m "chore: update tenders $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
