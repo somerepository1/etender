@@ -118,6 +118,14 @@ def normalise(item, keyword, event_type):
         else "closed" if any(x in s for x in ["closed","bağlı","0","finish"]) \
         else ("open" if not status_raw else status_raw)
 
+    estimated_price = pick(item,
+        "estimatedPrice","estimatedValue","expectedPrice","amount",
+        "EstimatedPrice","EstimatedValue","price","lotValue","value")
+
+    opening_date = pick(item,
+        "openingDate","envelopeOpeningDate","auctionDate","openDate",
+        "OpeningDate","EnvelopeOpeningDate","bidsOpeningDate","openDateTime")
+
     return {
         "id":              tender_id,
         "document_number": doc_number,
@@ -125,8 +133,10 @@ def normalise(item, keyword, event_type):
         "organization":    org,
         "type":            {0: "Open Tender", 2: "e-Tender"}.get(event_type, f"Type {event_type}"),
         "matched_keyword": keyword,
+        "estimated_price": estimated_price,
         "date_published":  date_pub,
         "deadline":        deadline,
+        "opening_date":    opening_date,
         "status":          status,
         "url":             detail_url,
     }
