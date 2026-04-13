@@ -1,0 +1,23 @@
+{
+  "base_url": "https://etender.gov.az",
+
+  "search_url": "https://etender.gov.az/api/events?EventType={EVENT_TYPE}&PageSize=15&PageNumber={PAGE}&EventStatus=1&Keyword={KEYWORD}&buyerOrganizationName=&documentNumber=&publishDateFrom={DATE_FROM}&publishDateTo={DATE_TO}&AwardedparticipantName=&AwardedparticipantVoen=&DocumentViewType=&IsArchived=false",
+
+  "count_url": "https://etender.gov.az/api/count?EventType={EVENT_TYPE}&PageSize=15&PageNumber=1&EventStatus=1&Keyword={KEYWORD}&buyerOrganizationName=&documentNumber=&publishDateFrom={DATE_FROM}&publishDateTo={DATE_TO}&AwardedparticipantName=&AwardedparticipantVoen=&DocumentViewType=&IsArchived=false",
+
+  "event_types": [0, 2],
+
+  "keywords": [
+    "lisenziya",
+    "Cisco",
+    "IT avadanliq",
+    "kartric",
+    "masin ve avadanliqlar",
+    "Microsoft",
+    "printer",
+    "telefon aparatlari"
+  ],
+
+  "page_size": 15,
+  "max_pages": 20
+}
