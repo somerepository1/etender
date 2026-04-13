@@ -1,45 +1,18 @@
 {
-  "_comment": "Edit this file to match etender.gov.az's actual search URL and HTML structure.",
-
   "base_url": "https://etender.gov.az",
 
-  "search_url": "https://etender.gov.az/tender/search?keyword={KEYWORD}&startDate={DATE_FROM}&endDate={DATE_TO}&page={PAGE}",
+  "search_url": "https://etender.gov.az/api/events?EventType={EVENT_TYPE}&PageSize=15&PageNumber={PAGE}&EventStatus=1&Keyword={KEYWORD}&buyerOrganizationName=&documentNumber=&publishDateFrom={DATE_FROM}&publishDateTo={DATE_TO}&AwardedparticipantName=&AwardedparticipantVoen=&DocumentViewType=&IsArchived=false",
 
-  "_search_url_note": [
-    "HOW TO FIND THE REAL URL:",
-    "1. Open https://etender.gov.az in Chrome",
-    "2. Press F12 → Network tab → filter by XHR/Fetch",
-    "3. Do a search on the site",
-    "4. Click the request that loads tender results",
-    "5. Copy the Request URL",
-    "6. Replace the actual keyword with {KEYWORD}, dates with {DATE_FROM}/{DATE_TO}, page number with {PAGE}"
-  ],
+  "count_url": "https://etender.gov.az/api/count?EventType={EVENT_TYPE}&PageSize=15&PageNumber=1&EventStatus=1&Keyword={KEYWORD}&buyerOrganizationName=&documentNumber=&publishDateFrom={DATE_FROM}&publishDateTo={DATE_TO}&AwardedparticipantName=&AwardedparticipantVoen=&DocumentViewType=&IsArchived=false",
 
-  "row_selectors": [
-    ".tender-item",
-    ".procurement-item",
-    ".result-item",
-    "table.tenders-table tbody tr",
-    "table.results tbody tr",
-    ".tender-list li",
-    ".card.tender"
-  ],
+  "event_types": [0, 2],
 
-  "_row_selectors_note": "CSS selectors tried in order to find each tender row. Add the real selector once you inspect the page HTML.",
+  "_event_type_note": "0 = open tenders (açıq tender), 2 = e-tenders (e-tender). Both are scraped and merged.",
 
-  "field_map": {
-    "_note": "For each field: use a CSS selector string (e.g. '.tender-title') OR a column index integer (0=first cell). Empty string = skip.",
-    "id":             0,
-    "title":          1,
-    "organization":   2,
-    "date_published": 3,
-    "deadline":       4,
-    "type":           "",
-    "status":         ""
-  },
+  "page_size": 15,
 
   "default_keyword":   "",
   "default_date_from": "",
   "default_date_to":   "",
-  "max_pages": 10
+  "max_pages": 20
 }
