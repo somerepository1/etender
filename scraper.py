@@ -1,168 +1,221 @@
 #!/usr/bin/env python3
 """
-etender.gov.az scraper
-Runs in GitHub Actions — reads config.json, scrapes tenders, writes data/tenders.json
+etender.gov.az scraper — uses the real JSON API discovered via DevTools:
+  GET /events?EventType=0|2&PageSize=15&PageNumber=N&EventStatus=1
+              &Keyword=...&publishDateFrom=...&publishDateTo=...
 """
-import json, os, re, sys, time, urllib.parse
-from datetime import datetime, date
+import json, os, sys, time, urllib.parse
+from datetime import datetime, date, timedelta
 from pathlib import Path
 
 try:
     import requests
-    from bs4 import BeautifulSoup
 except ImportError:
-    print("Installing dependencies...")
-    os.system("pip install requests beautifulsoup4 lxml -q")
+    os.system("pip install requests -q")
     import requests
-    from bs4 import BeautifulSoup
 
 # ─── Load config ─────────────────────────────────────────────────────────────
 with open("config.json") as f:
     cfg = json.load(f)
 
-KEYWORD   = os.environ.get("KEYWORD",   cfg.get("default_keyword", ""))
-DATE_FROM = os.environ.get("DATE_FROM", cfg.get("default_date_from", ""))
-DATE_TO   = os.environ.get("DATE_TO",   cfg.get("default_date_to",   ""))
-MAX_PAGES = int(os.environ.get("MAX_PAGES", cfg.get("max_pages", 5)))
+BASE_URL   = cfg["base_url"]
+SEARCH_URL = cfg["search_url"]
+COUNT_URL  = cfg["count_url"]
+PAGE_SIZE  = int(cfg.get("page_size", 15))
+MAX_PAGES  = int(os.environ.get("MAX_PAGES", cfg.get("max_pages", 20)))
 
-SEARCH_URL     = cfg["search_url"]      # URL pattern with {KEYWORD}, {DATE_FROM}, {DATE_TO}, {PAGE}
-ROW_SELECTORS  = cfg["row_selectors"]   # list of CSS selectors to find tender rows
-FIELD_MAP      = cfg["field_map"]       # maps field name → CSS selector within a row
-BASE_URL       = cfg["base_url"]        # e.g. https://etender.gov.az
+# Dates default to last 30 days if not provided
+today     = date.today()
+ago30     = today - timedelta(days=30)
+KEYWORD   = os.environ.get("KEYWORD",   cfg.get("default_keyword",   ""))
+# Dates must be in ISO 8601 format: 2026-04-01T00:00:00.000Z
+def to_iso(d):
+    """Accept YYYY-MM-DD or already-formatted ISO string, return full ISO with time."""
+    if not d:
+        return ""
+    if "T" in str(d):
+        return str(d)
+    return str(d) + "T00:00:00.000Z"
+
+DATE_FROM = to_iso(os.environ.get("DATE_FROM", cfg.get("default_date_from", ago30.isoformat())))
+DATE_TO   = to_iso(os.environ.get("DATE_TO",   cfg.get("default_date_to",   today.isoformat())))
+EVENT_TYPES = cfg.get("event_types", [0, 2])
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    "Accept":          "application/json, text/plain, */*",
     "Accept-Language": "az,en;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer":         BASE_URL + "/main/",
 }
 
 session = requests.Session()
 session.headers.update(HEADERS)
 
-# ─── Build search URL ─────────────────────────────────────────────────────────
-def build_url(page=1):
-    url = SEARCH_URL
-    url = url.replace("{KEYWORD}",   urllib.parse.quote(KEYWORD))
-    url = url.replace("{DATE_FROM}", DATE_FROM)
-    url = url.replace("{DATE_TO}",   DATE_TO)
-    url = url.replace("{PAGE}",      str(page))
-    return url
+def warm_up():
+    try:
+        r = session.get(BASE_URL + "/main/", timeout=20)
+        print(f"  Warm-up: {r.status_code}")
+    except Exception as e:
+        print(f"  Warm-up failed (continuing): {e}")
 
-# ─── Extract a field from a row element ──────────────────────────────────────
-def get_field(row, selector_or_idx):
-    """selector_or_idx can be a CSS selector string or an integer (column index)"""
-    if selector_or_idx is None:
+def build_url(template, event_type, page=1):
+    return (template
+        .replace("{EVENT_TYPE}", str(event_type))
+        .replace("{PAGE}",       str(page))
+        .replace("{KEYWORD}",    urllib.parse.quote(KEYWORD))
+        .replace("{DATE_FROM}",  DATE_FROM)
+        .replace("{DATE_TO}",    DATE_TO))
+
+def get_count(event_type):
+    url = build_url(COUNT_URL, event_type)
+    try:
+        r = session.get(url, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, int):
+            return data
+        if isinstance(data, dict):
+            return data.get("count") or data.get("total") or data.get("totalCount") or 0
+    except Exception as e:
+        print(f"  Count error (EventType={event_type}): {e}")
+    return None
+
+def normalise(item, event_type):
+    def pick(*keys):
+        for k in keys:
+            v = item.get(k)
+            if v is not None and str(v).strip():
+                return str(v).strip()
         return ""
-    if isinstance(selector_or_idx, int):
-        cells = row.select("td, th")
-        return cells[selector_or_idx].get_text(strip=True) if selector_or_idx < len(cells) else ""
-    el = row.select_one(selector_or_idx)
-    return el.get_text(strip=True) if el else ""
 
-def get_link(row):
-    a = row.select_one("a[href]")
-    if not a:
-        return ""
-    href = a["href"]
-    if href.startswith("http"):
-        return href
-    return BASE_URL.rstrip("/") + "/" + href.lstrip("/")
+    tender_id  = pick("id", "tenderId", "eventId", "Id", "number")
+    title      = pick("name", "title", "subject", "eventName", "Name", "Title")
+    org        = pick("buyerOrganizationName", "organization", "buyer", "customerName", "BuyerOrganizationName")
+    date_pub   = pick("publishDate", "datePublished", "startDate", "PublishDate", "createdDate")
+    deadline   = pick("deadline", "endDate", "submissionDeadline", "Deadline", "EndDate")
+    status_raw = pick("status", "eventStatus", "Status", "state")
+    doc_number = pick("documentNumber", "docNumber", "lotNumber")
 
-# ─── Parse one page ──────────────────────────────────────────────────────────
-def parse_page(html):
-    soup = BeautifulSoup(html, "lxml")
-    rows = []
+    detail_url = ""
+    url_slug   = pick("url", "link", "detailUrl")
+    if url_slug:
+        detail_url = url_slug if url_slug.startswith("http") else BASE_URL.rstrip("/") + "/" + url_slug.lstrip("/")
+    elif tender_id:
+        detail_url = f"{BASE_URL}/tender/detail/{tender_id}"
 
-    for sel in ROW_SELECTORS:
-        found = soup.select(sel)
-        if found:
-            rows = found
-            break
+    s = status_raw.lower()
+    if any(x in s for x in ["active", "open", "açıq", "aktiv", "1"]):
+        status = "open"
+    elif any(x in s for x in ["closed", "bağlı", "0", "finish"]):
+        status = "closed"
+    else:
+        status = "open" if status_raw == "" else status_raw
 
-    # Fallback: any table rows with 3+ cells
-    if not rows:
-        rows = [tr for tr in soup.select("table tr")
-                if len(tr.select("td")) >= 3]
+    type_label = {0: "Open Tender", 2: "e-Tender"}.get(event_type, f"Type {event_type}")
 
+    return {
+        "id":              tender_id,
+        "document_number": doc_number,
+        "title":           title,
+        "organization":    org,
+        "type":            type_label,
+        "date_published":  date_pub,
+        "deadline":        deadline,
+        "status":          status,
+        "url":             detail_url,
+        "_raw":            item,
+    }
+
+def scrape_event_type(event_type):
     results = []
-    for i, row in enumerate(rows):
-        entry = {
-            "id":             get_field(row, FIELD_MAP.get("id",   0)),
-            "title":          get_field(row, FIELD_MAP.get("title", 1)),
-            "organization":   get_field(row, FIELD_MAP.get("organization", 2)),
-            "date_published": get_field(row, FIELD_MAP.get("date_published", 3)),
-            "deadline":       get_field(row, FIELD_MAP.get("deadline", 4)),
-            "type":           get_field(row, FIELD_MAP.get("type", "")),
-            "status":         get_field(row, FIELD_MAP.get("status", "")),
-            "url":            get_link(row),
-        }
-        # Skip empty/header rows
-        if not entry["title"] or entry["title"].lower() in ("title", "subject", "başlıq", ""):
-            continue
-        results.append(entry)
-    return results
+    print(f"\n── EventType={event_type} ──────────────────────────────")
 
-# ─── Detect last page ─────────────────────────────────────────────────────────
-def has_next_page(html, current_page):
-    soup = BeautifulSoup(html, "lxml")
-    # Common: pagination link with page+1
-    next_links = soup.select(f'a[href*="page={current_page+1}"], .pagination .next:not(.disabled)')
-    return len(next_links) > 0
+    total = get_count(event_type)
+    if total is not None:
+        pages_needed = min(MAX_PAGES, -(-int(total) // PAGE_SIZE))
+        print(f"  Count: {total} → {pages_needed} page(s)")
+    else:
+        pages_needed = MAX_PAGES
+        print(f"  Count unknown → will try up to {MAX_PAGES} page(s)")
 
-# ─── Main scrape loop ─────────────────────────────────────────────────────────
-def scrape():
-    all_results = []
-    print(f"Scraping: keyword={KEYWORD!r} from={DATE_FROM} to={DATE_TO} max_pages={MAX_PAGES}")
-
-    for page in range(1, MAX_PAGES + 1):
-        url = build_url(page)
-        print(f"  Page {page}: {url}")
+    for page in range(1, pages_needed + 1):
+        url = build_url(SEARCH_URL, event_type, page)
+        print(f"  Page {page}/{pages_needed}: {url[:100]}…")
         try:
-            resp = session.get(url, timeout=30)
-            resp.raise_for_status()
+            r = session.get(url, timeout=30)
+            r.raise_for_status()
         except requests.RequestException as e:
             print(f"  ERROR: {e}")
             break
 
-        rows = parse_page(resp.text)
-        print(f"  Found {len(rows)} rows")
-
-        if not rows:
-            print("  No rows — stopping.")
+        try:
+            data = r.json()
+        except ValueError:
+            print(f"  Not JSON. First 300 chars: {r.text[:300]}")
             break
 
-        all_results.extend(rows)
+        items = []
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            for key in ("items", "data", "results", "events", "tenders", "list"):
+                if key in data and isinstance(data[key], list):
+                    items = data[key]
+                    break
+            if not items:
+                for v in data.values():
+                    if isinstance(v, list) and len(v) > 0:
+                        items = v
+                        break
 
-        if not has_next_page(resp.text, page):
-            print("  No next page — done.")
+        print(f"  → {len(items)} items")
+        if not items:
             break
 
-        time.sleep(1.5)  # be polite
+        for item in items:
+            results.append(normalise(item, event_type))
 
-    return all_results
+        time.sleep(0.8)
 
-# ─── Write output ─────────────────────────────────────────────────────────────
-def write_output(results):
+    return results
+
+def main():
+    print(f"etender.gov.az scraper")
+    print(f"  keyword={KEYWORD!r}  from={DATE_FROM}  to={DATE_TO}  types={EVENT_TYPES}")
+
+    warm_up()
+
+    all_results = []
+    for et in EVENT_TYPES:
+        all_results.extend(scrape_event_type(et))
+
+    seen, deduped = set(), []
+    for r in all_results:
+        key = r["id"] or r["title"]
+        if key and key not in seen:
+            seen.add(key)
+            r.pop("_raw", None)
+            deduped.append(r)
+
+    print(f"\nTotal: {len(all_results)} scraped, {len(deduped)} after dedup")
+
     Path("data").mkdir(exist_ok=True)
     output = {
         "scraped_at": datetime.utcnow().isoformat() + "Z",
         "keyword":    KEYWORD,
         "date_from":  DATE_FROM,
         "date_to":    DATE_TO,
-        "count":      len(results),
-        "results":    results
+        "count":      len(deduped),
+        "results":    deduped,
     }
     with open("data/tenders.json", "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
-    print(f"\nWrote {len(results)} results → data/tenders.json")
+
+    print("Wrote data/tenders.json ✓")
+
+    if not deduped:
+        print("\nWARNING: 0 results. Add  print(r.json())  in scrape_event_type() to debug raw response.")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    results = scrape()
-    write_output(results)
-    if not results:
-        print("\nWARNING: 0 results scraped. Check config.json:")
-        print("  1. Open etender.gov.az, search for something")
-        print("  2. In Chrome DevTools → Network, find the search request URL")
-        print("  3. Update 'search_url' in config.json with the real pattern")
-        sys.exit(1)
+    main()
